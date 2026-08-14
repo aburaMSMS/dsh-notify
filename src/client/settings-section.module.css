@@ -1,0 +1,86 @@
+/* Settings section form: dark-theme-friendly plain controls (the shell
+   supplies the panel chrome; this file styles only the form content). */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.groupTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.groupHint {
+  margin: -6px 0 0;
+  opacity: 0.65;
+  font-size: 12px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.rowLabel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.rowHint {
+  opacity: 0.55;
+  font-size: 11px;
+}
+
+.rowControl {
+  flex-shrink: 0;
+}
+
+.checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: #4d6bfe;
+  cursor: pointer;
+}
+
+.text {
+  width: 240px;
+  padding: 5px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  font-size: 13px;
+}
+
+.text:focus-visible {
+  outline: 2px solid #7aa2ff;
+  outline-offset: 1px;
+}
+
+.select {
+  min-width: 140px;
+  padding: 5px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  font-size: 13px;
+}
+
+.notice {
+  opacity: 0.7;
+  padding: 12px 0;
+}

@@ -1,0 +1,72 @@
+/* Bottom-right fixed anchor hosting the toast stack; cards keep pointer
+   events, the anchor itself never blocks the page. */
+.host {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2147482000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  width: 340px;
+  max-width: calc(100vw - 32px);
+  pointer-events: none;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.toast {
+  pointer-events: auto;
+  background: rgba(22, 24, 31, 0.94);
+  color: #e8eaf0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 10px 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1.45;
+  animation: dshNotifyIn 0.18s ease-out;
+}
+
+.toast:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.toast:focus-visible {
+  outline: 2px solid #7aa2ff;
+  outline-offset: 2px;
+}
+
+.title {
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.body {
+  opacity: 0.85;
+  overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
+  }
+}
+
+@keyframes dshNotifyIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
