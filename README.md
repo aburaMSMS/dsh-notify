@@ -15,10 +15,10 @@
 
 ## 怎么工作的
 
-- **Windows 原生通知**：host 进程监听会话事件，用系统自带的 WinRT 通知接口直发，完全不经过浏览器权限——浏览器整个关掉也照样收得到。通知以「DSH Notify」这个独立应用身份出现，默认配 DeepSeek 鲸鱼标图标，点击直接打开对应会话的页面；
-- **页内 toast**：页面开着的时候，右下角同步弹一条，点一下跳到对应会话。
+- **Windows 原生通知**：host 进程监听会话事件，用系统自带的 WinRT 通知接口直发，完全不经过浏览器权限——浏览器整个关掉也照样收得到。通知以「DSH Notify」这个独立应用身份出现，默认配 DeepSeek 鲸鱼标图标，点击打开 `desktopToast.openUrl` 配置的 DSH 页面；
+- **页内 toast**：页面开着的时候，右下角同步弹一条，点一下跳到对应会话，右上角 × 可直接关掉。
 
-首次启动会自动在开始菜单注册「DSH Notify」身份（名称、图标、点击行为都在这上面）。之后改了应用名或图标，重启 dsh web 就会自动重建。
+首次启动会自动在开始菜单注册「DSH Notify」身份（名称、图标、点击行为都在这上面）。之后改了应用名、图标或 `openUrl`，重启 dsh web 就会自动重建。该通道仅 Windows 主机启用：非 Windows 或 PowerShell 不可用时自动跳过（日志会有 `dsh-notify:` 提示），ntfy 与页内 toast 不受影响。
 
 ## 安装
 
@@ -42,16 +42,24 @@ dsh plugin --profile web add github:aburaMSMS/dsh-notify
 | `language` | `zh` | 文案语言：`zh` / `en` |
 | `customTitle` | 空 | 自定义通知标题，留空用「任务执行完毕」这类内置标题 |
 | `onStart` / `onCompletion` / `onApproval` / `onQuestion` | 关/开/开/开 | 四种场景的开关 |
-| `desktopToast.enabled` | `true` | 原生通知总开关 |
+| `desktopToast.enabled` | `true` | 原生通知总开关（非 Windows 主机自动跳过） |
 | `desktopToast.shell` | `powershell` | 用 5.1（WinRT 直发需要）；pwsh 发不了 |
 | `desktopToast.timeoutMs` | `10000` | 通知进程超时（毫秒） |
 | `desktopToast.appId` | `Dsh.Notify` | 通知身份 ID，一般不用动 |
 | `desktopToast.appName` | `DSH Notify` | 通知头部显示的名字 |
 | `desktopToast.logoPath` | 空 | 换图标：本地 PNG/ICO 绝对路径，留空用内置鲸鱼标 |
-| `desktopToast.openUrl` | `http://127.0.0.1:3080` | 点通知打开的地址 |
+| `desktopToast.openUrl` | `http://127.0.0.1:3080` | 点通知打开的地址；修改后会自动重建通知身份 |
+| `ntfy.enabled` | `false` | ntfy 推送总开关 |
+| `ntfy.server` | `https://ntfy.sh` | ntfy 服务器地址（可自建） |
+| `ntfy.topic` | 空 | 推送主题；启用时必填，订阅同一主题的设备会收到 |
+| `ntfy.token` | 空 | 受保护主题的访问令牌（可选） |
+| `ntfy.priority` | `default` | 通知优先级 |
+| `ntfy.tags` | `robot` | emoji 标签（逗号分隔）；内置场景标签优先，此值作为无标签消息的兜底 |
+| `ntfy.clickUrl` | 空 | 点击 ntfy 通知打开的 URL（可选） |
 
 ## 疑难排查
 
+- **非 Windows 主机收不到原生通知是正常的**：该通道需要 Windows 的 WinRT/PowerShell 5.1，其他平台会自动跳过（ntfy 与页内 toast 照常工作）。
 - **收不到通知**：先看设置页两个开关；再到 Windows 设置 → 系统 → 通知，确认「DSH Notify」开着、专注助手没拦；最后确认任务真的符合上面四种场景（正盯着的会话跑完是刻意不弹的）。
 - **通知还是 PowerShell 的名字**：身份没注册上，删掉开始菜单里的 `DSH Notify.lnk`，重启 dsh web 让它重建。
 - **设置页一直加载不出来**：多半是 host 没重启（设置桥接路由要重启才注册）。还不行就 `curl http://127.0.0.1:3080/api/dsh-notify/settings` 看看回什么。

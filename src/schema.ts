@@ -28,7 +28,7 @@ export const NotifyConfigSchema: z<NotifyConfig> = z.object({
     topic: z.string().default('').description('推送主题；订阅同一主题的设备会收到（启用时必填）'),
     token: z.string().role('secret').default('').description('受保护主题的访问令牌（可选）'),
     priority: z.union(['min', 'low', 'default', 'high', 'max']).default('default').description('通知优先级'),
-    tags: z.string().default('robot').description('通知上的 emoji 标签（逗号分隔）'),
+    tags: z.string().default('robot').description('通知上的 emoji 标签（逗号分隔；内置场景标签优先，此值作为无标签消息的兜底）'),
     clickUrl: z.string().default('').description('点击 ntfy 通知打开的 URL（可选）'),
   }).description('ntfy.sh 推送通道'),
   desktopToast: z.object({

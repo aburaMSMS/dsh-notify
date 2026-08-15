@@ -22,17 +22,45 @@
 }
 
 .toast {
+  position: relative;
   pointer-events: auto;
   background: rgba(22, 24, 31, 0.94);
   color: #e8eaf0;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 10px;
-  padding: 10px 12px;
+  padding: 10px 32px 10px 12px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   cursor: pointer;
   font-size: 13px;
   line-height: 1.45;
   animation: dshNotifyIn 0.18s ease-out;
+}
+
+.close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-size: 16px;
+  line-height: 20px;
+  opacity: 0.55;
+  cursor: pointer;
+}
+
+.close:hover {
+  opacity: 0.9;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.close:focus-visible {
+  outline: 2px solid #7aa2ff;
+  outline-offset: 1px;
 }
 
 .toast:hover {

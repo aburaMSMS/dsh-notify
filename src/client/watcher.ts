@@ -69,12 +69,14 @@ export function rowsOf(snapshot: SessionListState): WatchedRow[] {
 
 /**
  * Diff the previous rows against the current ones.
- * @param prev - previous normalized rows keyed by session id (sessions never
- *   seen before produce no events — the initial baseline stays silent).
+ * @param prev - previous normalized rows keyed by session id.
  * @param rows - current normalized rows.
  * @param pageActive - whether the page is visible AND focused (suppresses the
  *   completion notification for the current session the user is watching).
  * @param onStart - whether start notifications are enabled.
+ * @param includeNew - whether rows never seen before produce events. The
+ *   initial baseline keeps this false (reloads stay silent); after the first
+ *   snapshot, true makes sessions created later notify on arrival.
  * @returns events in list order.
  */
 export function diffSessions(
@@ -82,11 +84,25 @@ export function diffSessions(
   rows: readonly WatchedRow[],
   pageActive: boolean,
   onStart: boolean,
+  includeNew = false,
 ): NotifyEvent[] {
   const events: NotifyEvent[] = []
   for (const row of rows) {
     const before = prev.get(row.id)
-    if (before === undefined) continue
+    if (before === undefined) {
+      // A just-arrived session: the blocking interaction matters most; a
+      // completed or already-running row only fires when we are past the
+      // initial baseline.
+      if (!includeNew) continue
+      if (row.pending !== undefined) {
+        events.push({ kind: pendingKind(row.pending), sessionId: row.id, label: row.label })
+      } else if (row.completed) {
+        events.push({ kind: 'completion', sessionId: row.id, label: row.label })
+      } else if (onStart && row.running) {
+        events.push({ kind: 'start', sessionId: row.id, label: row.label })
+      }
+      continue
+    }
     // Completion: the runtime's "finished while not selected" flag, or the
     // current session stopping while the user is not watching this page.
     const completedNow = row.completed && !before.completed
@@ -124,11 +140,15 @@ export function mountWatcher(
   onEvent: (event: NotifyEvent) => void,
 ): () => void {
   const list = sessions.list
+  // The initial snapshot is the silent baseline (page reloads must not replay
+  // old interactions). Every later notification diffs against it with
+  // includeNew, so sessions created after mount notify on arrival while the
+  // mount-time rows keep their baseline silence.
   let prev = new Map(rowsOf(list.getSnapshot()).map(row => [row.id, row]))
   const unsubscribe = list.subscribe(() => {
     const rows = rowsOf(list.getSnapshot())
     const pageActive = typeof document !== 'undefined' && document.visibilityState === 'visible' && document.hasFocus()
-    const events = diffSessions(prev, rows, pageActive, getConfig().onStart)
+    const events = diffSessions(prev, rows, pageActive, getConfig().onStart, true)
     prev = new Map(rows.map(row => [row.id, row]))
     for (const event of events) onEvent(event)
   })

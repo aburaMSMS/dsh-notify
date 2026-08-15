@@ -35,7 +35,7 @@ import type { SessionTitleService } from '@deepseek-ai/dsh-session-title'
 import type {} from '@deepseek-ai/dsh-session-title'
 import type { NotifyConfig, NtfyPriority, PartialNotifyConfig } from './config.ts'
 import { NOTIFY_DEFAULTS, withDefaults } from './config.ts'
-import { desktopAumidHelperPath, desktopIconPath, desktopLogoPath, ensureDesktopAppId, sendDesktopToast } from './desktop.ts'
+import { desktopAumidHelperPath, desktopIconPath, desktopIdentitySignature, desktopLogoPath, desktopToastSupported, ensureDesktopAppId, sendDesktopToast } from './desktop.ts'
 import {
   applyCustomTitle, approvalMessage, completionMessage, questionMessage, startMessage,
   type NotifyMessage,
@@ -181,15 +181,30 @@ export class NotifyService extends Service {
       this.desktopSignature = ''
       return
     }
+    if (!desktopToastSupported()) {
+      this.desktopAvailable = false
+      this.desktopSignature = ''
+      this.ctx.logger.info('dsh-notify: windows native toasts skipped (not a win32 host)')
+      return
+    }
     const desktop = cfg.desktopToast
-    // The identity shortcut must reflect appName + icon; the signature skips
-    // re-registration when nothing relevant changed.
-    const signature = `${desktop.appId}\u0000${desktop.appName}\u0000${this.shortcutIconPath(cfg)}`
+    // The identity shortcut must reflect appName, icon, and click target; the
+    // signature skips re-registration when nothing relevant changed.
+    const signature = desktopIdentitySignature(desktop, this.shortcutIconPath(cfg))
     if (this.desktopAvailable && this.desktopSignature === signature) return
-    await ensureDesktopAppId(desktop, this.shortcutIconPath(cfg), desktopAumidHelperPath())
-    this.desktopAvailable = true
-    this.desktopSignature = signature
-    this.ctx.logger.info(`dsh-notify: windows native toasts active (app "${desktop.appName}")`)
+    try {
+      await ensureDesktopAppId(desktop, this.shortcutIconPath(cfg), desktopAumidHelperPath())
+      this.desktopAvailable = true
+      this.desktopSignature = signature
+      this.ctx.logger.info(`dsh-notify: windows native toasts active (app "${desktop.appName}")`)
+    } catch (error) {
+      // The desktop channel is optional: a missing shell (or a non-Windows
+      // PowerShell shim) must not take the whole plugin down. ntfy and the
+      // browser half keep working; a later settings change retries.
+      this.desktopAvailable = false
+      this.desktopSignature = ''
+      this.ctx.logger.warn(`dsh-notify: windows native toast identity unavailable (${String(error)}); desktop toasts stay off`)
+    }
   }
 
   /** Shortcut icon: the user's .ico when configured, the bundled icon otherwise. */

@@ -11,7 +11,7 @@
  * @module dsh-notify/client/toast
  */
 
-import type { ReactNode, KeyboardEvent } from 'react'
+import type { MouseEvent, ReactNode, KeyboardEvent } from 'react'
 import { useCallback, useEffect, useSyncExternalStore } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import css from './toast.module.css'
@@ -117,7 +117,14 @@ function Toast({ item, onDismiss, onOpenSession }: {
     onDismiss()
   }, [item.sessionId, onOpenSession, onDismiss])
 
+  const close = useCallback((event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation()
+    onDismiss()
+  }, [onDismiss])
+
   const handleKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
+    // Only the toast card itself activates; the close button owns its own keys.
+    if (event.target !== event.currentTarget) return
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault()
       open()
@@ -133,6 +140,7 @@ function Toast({ item, onDismiss, onOpenSession }: {
       onClick={open}
       onKeyDown={handleKeyDown}
     >
+      <button type="button" className={css.close} aria-label="关闭通知" onClick={close}>×</button>
       <div className={css.title}>{item.title}</div>
       <div className={css.body}>{item.body}</div>
     </div>

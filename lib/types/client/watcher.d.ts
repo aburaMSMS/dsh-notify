@@ -43,15 +43,17 @@ export interface WatchedRow {
 export declare function rowsOf(snapshot: SessionListState): WatchedRow[];
 /**
  * Diff the previous rows against the current ones.
- * @param prev - previous normalized rows keyed by session id (sessions never
- *   seen before produce no events — the initial baseline stays silent).
+ * @param prev - previous normalized rows keyed by session id.
  * @param rows - current normalized rows.
  * @param pageActive - whether the page is visible AND focused (suppresses the
  *   completion notification for the current session the user is watching).
  * @param onStart - whether start notifications are enabled.
+ * @param includeNew - whether rows never seen before produce events. The
+ *   initial baseline keeps this false (reloads stay silent); after the first
+ *   snapshot, true makes sessions created later notify on arrival.
  * @returns events in list order.
  */
-export declare function diffSessions(prev: ReadonlyMap<string, WatchedRow>, rows: readonly WatchedRow[], pageActive: boolean, onStart: boolean): NotifyEvent[];
+export declare function diffSessions(prev: ReadonlyMap<string, WatchedRow>, rows: readonly WatchedRow[], pageActive: boolean, onStart: boolean, includeNew?: boolean): NotifyEvent[];
 /**
  * Subscribe to the sessions list and forward diffs as notification events.
  * @param sessions - the client sessions service (resolved by the caller; the
