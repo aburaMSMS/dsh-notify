@@ -139,6 +139,7 @@ describe('NotifyService in a cordis composition', () => {
     expect(url).toBe('https://ntfy.sh/my-topic')
     const headers = init.headers as Record<string, string>
     expect(headers.Title).toBe('任务执行完毕')
+    expect(headers.Tags).toBe('white_check_mark')
     expect(String(init.body)).toContain('demo')
   })
 

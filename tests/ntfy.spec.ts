@@ -21,7 +21,15 @@ describe('ntfyRequest', () => {
     const headers = request.init.headers as Record<string, string>
     expect(headers.Title).toBe('任务执行完毕')
     expect(headers.Priority).toBe('high')
-    expect(headers.Tags).toBe('lock')
+    expect(headers.Tags).toBe('white_check_mark')
+  })
+
+  it('prefers the per-message situation tags and falls back to the configured tags', () => {
+    const withSituation = ntfyRequest({ ...ntfy, tags: 'robot' }, completionMessage('zh', '测试'))
+    expect((withSituation.init.headers as Record<string, string>).Tags).toBe('white_check_mark')
+    const tagless = { title: '自定义', body: '无标签', tags: '' }
+    const fallback = ntfyRequest({ ...ntfy, tags: 'robot' }, tagless)
+    expect((fallback.init.headers as Record<string, string>).Tags).toBe('robot')
   })
 
   it('adds Authorization and Click headers only when configured', () => {

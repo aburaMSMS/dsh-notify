@@ -28,6 +28,31 @@ describe('diffSessions', () => {
     expect(diffSessions(new Map(), [row({})], true, false)).toEqual([])
   })
 
+  it('notifies for a new session that arrives with a pending interaction after the baseline', () => {
+    expect(diffSessions(new Map(), [row({ pending: 'question' })], true, false, true)).toEqual([
+      { kind: 'question', sessionId: 's1', label: 'demo' },
+    ])
+    expect(diffSessions(new Map(), [row({ pending: 'plan-review' })], true, false, true)).toEqual([
+      { kind: 'planReview', sessionId: 's1', label: 'demo' },
+    ])
+  })
+
+  it('notifies for a new session only once past the baseline and only for enabled situations', () => {
+    expect(diffSessions(new Map(), [row({ running: true })], true, false, true)).toEqual([])
+    expect(diffSessions(new Map(), [row({ running: true })], true, true, true)).toEqual([
+      { kind: 'start', sessionId: 's1', label: 'demo' },
+    ])
+    expect(diffSessions(new Map(), [row({ completed: true })], true, false, true)).toEqual([
+      { kind: 'completion', sessionId: 's1', label: 'demo' },
+    ])
+  })
+
+  it('prefers the pending interaction over start/completion for a new session', () => {
+    expect(diffSessions(new Map(), [row({ running: true, pending: 'approval', completed: true })], true, true, true)).toEqual([
+      { kind: 'approval', sessionId: 's1', label: 'demo' },
+    ])
+  })
+
   it('emits completion when the completed flag flips', () => {
     const prev = new Map([['s1', row({})]])
     expect(diffSessions(prev, [row({ completed: true })], true, false)).toEqual([

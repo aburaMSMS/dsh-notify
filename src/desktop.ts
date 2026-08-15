@@ -47,9 +47,33 @@ export function xmlEscape(value: string): string {
     .replace(/'/gu, '&apos;')
 }
 
-/** Build a file:// URI from an absolute Windows path (spaces/unicode encoded). */
+/** Encode every slash-separated segment of a URI path (slashes stay literal). */
+function encodeUriPath(path: string): string {
+  return path.split('/').map(encodeURIComponent).join('/')
+}
+
+/**
+ * Build a file:// URI from an absolute Windows path. The encoding is
+ * platform-independent (the host may run tests/builds outside Windows) and
+ * encodes `#`, `?`, `%`, spaces, and unicode per segment while keeping the
+ * drive letter and UNC server/share syntax.
+ */
 export function fileUri(path: string): string {
-  return encodeURI(`file:///${path.replace(/\\/gu, '/')}`)
+  const normalized = path.replace(/\\/gu, '/')
+  const drive = /^([A-Za-z]):\/(.*)$/u.exec(normalized)
+  if (drive !== null) return `file:///${drive[1]}:/${encodeUriPath(drive[2])}`
+  if (normalized.startsWith('//')) return `file://${encodeUriPath(normalized.slice(2))}`
+  return `file:///${encodeUriPath(normalized)}`
+}
+
+/** Whether the desktop toast channel can run on this platform (WinRT/PowerShell path is Windows-only). */
+export function desktopToastSupported(platform: NodeJS.Platform = process.platform): boolean {
+  return platform === 'win32'
+}
+
+/** Signature of the toast identity: every shortcut-affecting setting must be part of it. */
+export function desktopIdentitySignature(config: DesktopToastConfig, iconPath: string): string {
+  return `${config.appId}\u0000${config.appName}\u0000${iconPath}\u0000${config.openUrl.trim()}`
 }
 
 /**
@@ -134,9 +158,11 @@ export function ensureAppIdScript(config: DesktopToastConfig, iconPath: string, 
     "  $sc.TargetPath = (Get-Command cmd.exe).Source",
   ]
   if (config.openUrl.trim() !== '') {
-    // PowerShell double-quoted literal: "" escapes one quote, so the stored
-    // value is: /c start "" "http://…" (cmd opens the URL, no window lingers).
-    lines.push(`  $sc.Arguments = "/c start "" ""${config.openUrl}"""`)
+    // The URL travels as a PowerShell single-quoted value and is substituted
+    // into the cmd argument template with -f, so quotes/backticks/$ in the URL
+    // stay data instead of becoming shell syntax. The stored value is:
+    // /c start "" "http://…" (cmd opens the URL, no window lingers).
+    lines.push(`  $sc.Arguments = ('/c start "" "{0}"' -f ${psQuote(config.openUrl.trim())})`)
   }
   lines.push(
     '  $sc.WorkingDirectory = $env:TEMP',

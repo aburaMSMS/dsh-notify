@@ -14,7 +14,7 @@
  */
 
 import type { ReactNode } from 'react'
-import { useSyncExternalStore } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { NotifyConfig } from '../config.ts'
 import { NOTIFY_DEFAULTS } from '../config.ts'
 import type { NotifySettingsFace } from './settings-client.ts'
@@ -150,13 +150,67 @@ function Checkbox({ checked, onChange }: { checked: boolean; onChange: (checked:
   return <input type="checkbox" className={css.checkbox} checked={checked} onChange={event => { onChange(event.target.checked) }} />
 }
 
+/** Text edits commit after a quiet pause (and on blur) instead of POSTing per keystroke. */
+const TEXT_COMMIT_MS = 400
+
 function TextInput({ value, placeholder, type = 'text', onChange }: {
   value: string
   placeholder?: string
   type?: 'text' | 'password'
   onChange: (value: string) => void
 }): ReactNode {
-  return <input type={type} className={css.text} value={value} placeholder={placeholder} onChange={event => { onChange(event.target.value) }} />
+  const [draft, setDraft] = useState(value)
+  const [dirty, setDirty] = useState(false)
+  const timer = useRef<number | undefined>(undefined)
+  const committed = useRef(value)
+
+  // Follow external updates (own commits, other fields' reloads) only while
+  // the user is not mid-edit; a pending edit always wins locally.
+  useEffect(() => {
+    if (!dirty) {
+      setDraft(value)
+      committed.current = value
+    }
+  }, [value, dirty])
+
+  useEffect(() => () => {
+    if (timer.current !== undefined) window.clearTimeout(timer.current)
+  }, [])
+
+  const flush = (next: string): void => {
+    if (timer.current !== undefined) {
+      window.clearTimeout(timer.current)
+      timer.current = undefined
+    }
+    if (next === committed.current) {
+      setDirty(false)
+      return
+    }
+    committed.current = next
+    setDirty(false)
+    onChange(next)
+  }
+
+  const change = (next: string): void => {
+    setDraft(next)
+    setDirty(true)
+    if (timer.current !== undefined) window.clearTimeout(timer.current)
+    timer.current = window.setTimeout(() => {
+      timer.current = undefined
+      flush(next)
+    }, TEXT_COMMIT_MS)
+  }
+
+  return (
+    <input
+      type={type}
+      className={css.text}
+      value={draft}
+      placeholder={placeholder}
+      onChange={event => { change(event.target.value) }}
+      onBlur={() => { flush(draft) }}
+    />
+  )
 }
 
 function Select({ value, options, onChange }: {

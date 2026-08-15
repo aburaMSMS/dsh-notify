@@ -32,8 +32,17 @@ import type { NotifyMessage } from './messages.ts';
 export declare function psQuote(value: string): string;
 /** Escape text for inclusion in toast XML character data. */
 export declare function xmlEscape(value: string): string;
-/** Build a file:// URI from an absolute Windows path (spaces/unicode encoded). */
+/**
+ * Build a file:// URI from an absolute Windows path. The encoding is
+ * platform-independent (the host may run tests/builds outside Windows) and
+ * encodes `#`, `?`, `%`, spaces, and unicode per segment while keeping the
+ * drive letter and UNC server/share syntax.
+ */
 export declare function fileUri(path: string): string;
+/** Whether the desktop toast channel can run on this platform (WinRT/PowerShell path is Windows-only). */
+export declare function desktopToastSupported(platform?: NodeJS.Platform): boolean;
+/** Signature of the toast identity: every shortcut-affecting setting must be part of it. */
+export declare function desktopIdentitySignature(config: DesktopToastConfig, iconPath: string): string;
 /**
  * Build the WinRT toast XML for one notification.
  * @param title - toast headline.

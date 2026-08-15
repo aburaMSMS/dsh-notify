@@ -18,7 +18,9 @@ export interface NtfyPublishRequest {
 /**
  * Build the ntfy publish request for one message.
  * @param ntfy - resolved ntfy settings.
- * @param message - the notification to publish.
+ * @param message - the notification to publish. The message's own tags
+ *   (per-situation emoji tags) win; the configured `ntfy.tags` is the
+ *   fallback for tag-less service messages.
  * @returns URL and fetch init (headers carry Title/Priority/Tags and the
  *   optional Authorization and Click headers).
  */

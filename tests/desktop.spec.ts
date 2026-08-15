@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { withDefaults } from '../src/config.ts'
 import {
-  encodedPowerShellCommand, ensureAppIdScript, fileUri, psQuote, sendDesktopToast, winToastScript, winToastXml, xmlEscape,
+  desktopIdentitySignature, desktopToastSupported, encodedPowerShellCommand, ensureAppIdScript, fileUri, psQuote, sendDesktopToast, winToastScript, winToastXml, xmlEscape,
   type ToastChild,
 } from '../src/desktop.ts'
 import type { NotifyMessage } from '../src/messages.ts'
@@ -25,6 +25,10 @@ describe('xmlEscape / fileUri', () => {
 
   it('turns Windows paths into file URIs with encoded spaces', () => {
     expect(fileUri('C:\\Dev\\my icon.ico')).toBe('file:///C:/Dev/my%20icon.ico')
+  })
+
+  it('encodes fragment and query characters that encodeURI would leave in the URI', () => {
+    expect(fileUri('C:\\Dev\\my #1 icon?.png')).toBe('file:///C:/Dev/my%20%231%20icon%3F.png')
   })
 })
 
@@ -51,6 +55,25 @@ describe('encodedPowerShellCommand', () => {
   it('round-trips through UTF-16LE base64', () => {
     const encoded = encodedPowerShellCommand('$x = 1')
     expect(Buffer.from(encoded, 'base64').toString('utf16le')).toBe('$x = 1')
+  })
+})
+
+describe('desktopToastSupported', () => {
+  it('accepts only win32 platforms', () => {
+    expect(desktopToastSupported('win32')).toBe(true)
+    expect(desktopToastSupported('linux')).toBe(false)
+    expect(desktopToastSupported('darwin')).toBe(false)
+  })
+})
+
+describe('desktopIdentitySignature', () => {
+  it('changes with the click URL so openUrl edits re-register the shortcut', () => {
+    const base = desktopIdentitySignature(config, icon)
+    expect(desktopIdentitySignature({ ...config, openUrl: 'http://127.0.0.1:3081' }, icon)).not.toBe(base)
+  })
+
+  it('ignores surrounding whitespace in the click URL', () => {
+    expect(desktopIdentitySignature({ ...config, openUrl: ' http://127.0.0.1:3080 ' }, icon)).toBe(desktopIdentitySignature(config, icon))
   })
 })
 
@@ -84,7 +107,14 @@ describe('ensureAppIdScript', () => {
     const script = ensureAppIdScript(config, icon, helper)
     expect(script).toContain('cmd.exe')
     expect(script).toContain('/c start')
-    expect(script).toContain('http://127.0.0.1:3080')
+    expect(script).toContain("$sc.Arguments = ('/c start \"\" \"{0}\"' -f 'http://127.0.0.1:3080')")
+  })
+
+  it('escapes quotes in the click URL instead of breaking the PowerShell string', () => {
+    const nasty = 'http://127.0.0.1:3080/?next="/evil'
+    const script = ensureAppIdScript({ ...config, openUrl: nasty }, icon, helper)
+    expect(script).toContain(`-f ${psQuote(nasty)}`)
+    expect(script).not.toContain(`"" ""${nasty}"""`)
   })
 
   it('skips the URL repoint when openUrl is empty', () => {

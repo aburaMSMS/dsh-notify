@@ -10,6 +10,8 @@
 #   titles; empty = built-in (任务执行完毕 / 需要权限许可 / 需要你回答).
 # - ntfy.*         : ntfy.sh push (browser closed / phone). topic is
 #   REQUIRED when enabled; subscribe to the same topic on every device.
+#   tags is the fallback for tag-less service messages — built-in
+#   per-situation emoji tags win on event notifications.
 # - desktopToast.* : Windows native toasts raised by the HOST process — no
 #   browser permission involved, works with the page closed. logoPath may
 #   point at a local PNG/ICO (empty = bundled DeepSeek whale mark).
