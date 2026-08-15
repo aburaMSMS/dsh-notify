@@ -91,7 +91,7 @@ export const NOTIFY_DEFAULTS: NotifyConfig = {
     clickUrl: '',
   },
   desktopToast: {
-    enabled: false,
+    enabled: true,
     shell: 'powershell',
     timeoutMs: 10_000,
     appId: 'Dsh.Notify',

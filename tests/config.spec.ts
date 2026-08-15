@@ -25,4 +25,9 @@ describe('withDefaults', () => {
     expect(withDefaults(null).customTitle).toBe('')
     expect(withDefaults(null).desktopToast.logoPath).toBe('')
   })
+
+  it('enables Windows native toasts by default (matching cordis.patch.yml)', () => {
+    expect(NOTIFY_DEFAULTS.desktopToast.enabled).toBe(true)
+    expect(withDefaults({}).desktopToast.enabled).toBe(true)
+  })
 })

@@ -1,6 +1,6 @@
 # dsh-notify
 
-一个给 DSH Web UI 的提醒插件：会话执行完毕、工具请求许可、Agent 向你提问——这些「该你上场了」的时刻，用一条 Windows 系统通知把你叫回来。通知由主机进程直接发出，浏览器关不关、人在不在页面，都能收到。
+一个给 DSH Web UI 的提醒插件：会话执行完毕、工具请求许可、Agent 向你提问——这些「该你上场了」的时刻，人在 DSH 页面里就弹页内 toast，人不在页面就发 Windows 系统通知。通知由主机进程直接发出，浏览器关不关都收得到。
 
 ## 它提醒什么
 
@@ -11,12 +11,19 @@
 | 需要你回答 | Agent 用 `ask_user_question` 提问，或提交计划等你审阅 | 开 |
 | 开始执行 | 新一轮开始（通常是你自己发起的） | 关 |
 
-两个细节：正盯着看的那条会话跑完时不会打扰你（页面上已经能看到了），但切到别的应用之后结束就一定会弹；提问和审批这类会卡住会话的提醒，弹窗会停留 5 分钟等你处理。
+通道是自动选择的：
+
+| 你在哪 | 提醒走哪里 |
+| --- | --- |
+| DSH 页面可见且聚焦 | 只弹右下角页内 toast，Windows 通知静默 |
+| 页面隐藏 / 切到别的应用 / 浏览器关闭 | Windows 原生通知接管 |
+
+两个细节：页内 toast 不会在正盯着当前会话跑完时打扰你（页面上已经能看到结果），切到别的应用、页面隐藏后结束就会弹；Windows 通知在页面活跃时静默，页面一离开就自动恢复。ntfy 不受页面状态影响，按配置单独发送。提问和审批这类会卡住会话的页内弹窗会停留 5 分钟等你处理。
 
 ## 怎么工作的
 
-- **Windows 原生通知**：host 进程监听会话事件，用系统自带的 WinRT 通知接口直发，完全不经过浏览器权限——浏览器整个关掉也照样收得到。通知以「DSH Notify」这个独立应用身份出现，默认配 DeepSeek 鲸鱼标图标，点击打开 `desktopToast.openUrl` 配置的 DSH 页面；
-- **页内 toast**：页面开着的时候，右下角同步弹一条，点一下跳到对应会话，右上角 × 可直接关掉。
+- **Windows 原生通知**：host 进程监听会话事件，用系统自带的 WinRT 通知接口直发，完全不经过浏览器权限——浏览器整个关掉也照样收得到。页面会每隔几秒报告一次「在场」状态，页面可见且聚焦时 Windows 通知自动静默，页面离开后立即恢复。通知以「DSH Notify」这个独立应用身份出现，默认配 DeepSeek 鲸鱼标图标，点击打开 `desktopToast.openUrl` 配置的 DSH 页面；
+- **页内 toast**：页面可见且聚焦的时候，右下角同步弹一条，点一下跳到对应会话，右上角 × 可直接关掉。
 
 首次启动会自动在开始菜单注册「DSH Notify」身份（名称、图标、点击行为都在这上面）。之后改了应用名、图标或 `openUrl`，重启 dsh web 就会自动重建。该通道仅 Windows 主机启用：非 Windows 或 PowerShell 不可用时自动跳过（日志会有 `dsh-notify:` 提示），ntfy 与页内 toast 不受影响。
 
@@ -34,7 +41,7 @@ dsh plugin --profile web add github:aburaMSMS/dsh-notify
 
 ## 配置
 
-全部配置都在设置面板的「通知」页里，改完即时生效，存进 `~/.dsh/settings.yaml`。也可以在 profile 的配置层写默认值（`cordis.patch.yml`，仓库里带了一份模板）：
+常用配置都在设置面板的「通知」页里，改完即时生效，存进 `~/.dsh/settings.yaml`；即使关掉总开关，「通知」页也会保留，方便随时重新打开。`desktopToast.timeoutMs` 和 `desktopToast.appId` 属于高级项，不放在面板里，可在 profile 的配置层写（`cordis.patch.yml`，仓库里带了一份模板）：
 
 | 配置项 | 默认 | 说明 |
 | --- | --- | --- |
@@ -47,7 +54,7 @@ dsh plugin --profile web add github:aburaMSMS/dsh-notify
 | `desktopToast.timeoutMs` | `10000` | 通知进程超时（毫秒） |
 | `desktopToast.appId` | `Dsh.Notify` | 通知身份 ID，一般不用动 |
 | `desktopToast.appName` | `DSH Notify` | 通知头部显示的名字 |
-| `desktopToast.logoPath` | 空 | 换图标：本地 PNG/ICO 绝对路径，留空用内置鲸鱼标 |
+| `desktopToast.logoPath` | 空 | 换图标：本地 PNG/ICO 绝对路径，留空用内置鲸鱼标（PNG 替换 toast 内图；ICO 还会替换开始菜单身份图标） |
 | `desktopToast.openUrl` | `http://127.0.0.1:3080` | 点通知打开的地址；修改后会自动重建通知身份 |
 | `ntfy.enabled` | `false` | ntfy 推送总开关 |
 | `ntfy.server` | `https://ntfy.sh` | ntfy 服务器地址（可自建） |
@@ -69,7 +76,7 @@ dsh plugin --profile web add github:aburaMSMS/dsh-notify
 
 ```sh
 pnpm install
-pnpm verify      # 提交前跑：类型检查 + 58 个测试 + 构建
+pnpm verify      # 提交前跑：类型检查 + 全部测试 + 构建
 pnpm watch       # 改 client 代码后热重构建，刷新页面生效
 ```
 

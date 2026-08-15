@@ -3,8 +3,8 @@
  * dsh-web-ui shared tsdown preset). Emits two artifacts into lib/:
  *
  * - the node-half library (lib/index.js, ESM) with every @deepseek-ai/*
- *   package and schemastery external (resolved from the dsh profile tree at
- *   runtime);
+ *   package (including @deepseek-ai/schemastery) external (resolved from the
+ *   dsh profile tree at runtime);
  * - the browser bundle (lib/client.js), a closure-factory artifact for the
  *   GUI's __ModuleLoader__: externals resolve through the loader module
  *   table, CSS Modules are compiled by lightningcss with auto-injected
@@ -56,11 +56,9 @@ const libConfig: UserConfig = {
   dts: false,
   clean: false,
   sourcemap: true,
-  // The cordis framework and every @deepseek-ai/* runtime package resolve at
-  // runtime from the dsh profile tree; schemastery stays external for the
-  // same reason (its bundled declarations carry .ts-suffixed relative imports
-  // rolldown cannot follow).
-  external: [/^@deepseek-ai\//u, 'schemastery'],
+  // The cordis framework and every @deepseek-ai/* runtime package (including
+  // @deepseek-ai/schemastery) resolve at runtime from the dsh profile tree.
+  external: [/^@deepseek-ai\//u],
 }
 
 const clientConfig: UserConfig = {

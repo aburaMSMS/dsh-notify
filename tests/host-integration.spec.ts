@@ -31,6 +31,12 @@ const childAgent = { session: { ...session, id: 'sess-child' } } as unknown as A
 /** Config accepted by cordis plugin() (typed as the schema output). */
 const cfg = (value: PartialNotifyConfig): NotifyConfig => value as unknown as NotifyConfig
 
+/** Keep the real Windows toast identity out of the host tests. */
+const noDesktop = (value: PartialNotifyConfig = {}): PartialNotifyConfig => ({
+  desktopToast: { enabled: false },
+  ...value,
+})
+
 interface FetchMock {
   calls: Array<[string, RequestInit]>
 }
@@ -46,7 +52,7 @@ function installFetchMock(): FetchMock {
 }
 
 /** ntfy-enabled config with a real topic (so publishes are attempted). */
-const ntfyConfig = () => cfg({ ntfy: { enabled: true, topic: 'my-topic', priority: 'high' } })
+const ntfyConfig = () => cfg(noDesktop({ ntfy: { enabled: true, topic: 'my-topic', priority: 'high' } }))
 
 /** Provide a fake agents registry that treats `rootAgent` as the only root. */
 function provideAgents(root: Context): void {
@@ -81,7 +87,7 @@ describe('NotifyService in a cordis composition', () => {
   it('registers the settings namespace when a settings provider exists', async () => {
     const root = new Context()
     await root.plugin(FakeSettingsProvider)
-    await root.plugin(NotifyService, cfg({}))
+    await root.plugin(NotifyService, cfg(noDesktop()))
     const provider = root.get('settings') as SettingsProvider
     const descriptors = provider.describe({})
     expect(descriptors.some(descriptor => String(descriptor.ns) === 'dsh-notify')).toBe(true)
@@ -96,15 +102,56 @@ describe('NotifyService in a cordis composition', () => {
         return () => {}
       },
     })
-    await root.plugin(NotifyService, cfg({}))
-    expect(registered).toHaveLength(1)
+    await root.plugin(NotifyService, cfg(noDesktop()))
+    expect(registered).toHaveLength(2)
     expect((registered[0] as { path: string }).path).toBe('/api/dsh-notify/settings')
+    expect((registered[1] as { path: string }).path).toBe('/api/dsh-notify/presence')
+  })
+
+  it('tracks page presence through the bridge route', async () => {
+    const root = new Context()
+    const registered: Array<{ path: string; handler: (req: unknown, res: unknown) => Promise<void> }> = []
+    ;(root as unknown as { reflect: { provide(name: string, value: unknown): unknown } }).reflect.provide('webServer', {
+      register: (route: unknown) => {
+        registered.push(route as typeof registered[number])
+        return () => {}
+      },
+    })
+    await root.plugin(NotifyService, cfg(noDesktop()))
+
+    const service = (root as unknown as { get(name: string): unknown }).get('notify') as unknown as {
+      isClientPresent(): boolean
+    }
+    expect(service.isClientPresent()).toBe(false)
+
+    const presenceRoute = registered.find(route => route.path === '/api/dsh-notify/presence')
+    expect(presenceRoute).toBeDefined()
+    const req = {
+      method: 'POST',
+      socket: { remoteAddress: '127.0.0.1' },
+      headers: {},
+      async *[Symbol.asyncIterator]() {
+        yield Buffer.from('{"active":true}')
+      },
+    }
+    const res = { writeHead() {}, end() {} }
+    await presenceRoute!.handler(req, res)
+    expect(service.isClientPresent()).toBe(true)
+
+    const absentReq = {
+      ...req,
+      async *[Symbol.asyncIterator]() {
+        yield Buffer.from('{"active":false}')
+      },
+    }
+    await presenceRoute!.handler(absentReq, res)
+    expect(service.isClientPresent()).toBe(false)
   })
 
   it('registers the bridge routes lazily when the web server appears later', async () => {
     const root = new Context()
     const registered: unknown[] = []
-    await root.plugin(NotifyService, cfg({}))
+    await root.plugin(NotifyService, cfg(noDesktop()))
     expect(registered).toHaveLength(0)
     ;(root as unknown as { reflect: { provide(name: string, value: unknown): unknown } }).reflect.provide('webServer', {
       register: (route: unknown) => {
@@ -114,14 +161,15 @@ describe('NotifyService in a cordis composition', () => {
     })
     // The inject child fiber activates once the service appears.
     await new Promise(resolve => setTimeout(resolve, 20))
-    expect(registered).toHaveLength(1)
+    expect(registered).toHaveLength(2)
     expect((registered[0] as { path: string }).path).toBe('/api/dsh-notify/settings')
+    expect((registered[1] as { path: string }).path).toBe('/api/dsh-notify/presence')
   })
 
   it('fails loud when ntfy is enabled without a topic', async () => {
     const root = new Context()
     await expect(
-      root.plugin(NotifyService, cfg({ ntfy: { enabled: true, topic: '' } })),
+      root.plugin(NotifyService, cfg(noDesktop({ ntfy: { enabled: true, topic: '' } }))),
     ).rejects.toThrow(/topic/i)
   })
 
@@ -146,7 +194,7 @@ describe('NotifyService in a cordis composition', () => {
   it('applies the custom title when configured', async () => {
     const root = new Context()
     const fetchMock = installFetchMock()
-    await root.plugin(NotifyService, cfg({ customTitle: '【DSH】提醒', ntfy: { enabled: true, topic: 'my-topic' } }))
+    await root.plugin(NotifyService, cfg(noDesktop({ customTitle: '【DSH】提醒', ntfy: { enabled: true, topic: 'my-topic' } })))
 
     root.emit('agent/status', { agent: rootAgent, status: 'idle' })
 
@@ -197,7 +245,7 @@ describe('NotifyService in a cordis composition', () => {
   it('honors the per-situation switches and the master switch', async () => {
     const root = new Context()
     const fetchMock = installFetchMock()
-    await root.plugin(NotifyService, cfg({ onCompletion: false, onApproval: false, ntfy: { enabled: true, topic: 'my-topic' } }))
+    await root.plugin(NotifyService, cfg(noDesktop({ onCompletion: false, onApproval: false, ntfy: { enabled: true, topic: 'my-topic' } })))
 
     root.emit('agent/status', { agent: rootAgent, status: 'idle' })
     await root.waterfall('approval/request', { agent: rootAgent, toolName: 'bash' }, () => Promise.resolve('unavailable' as const))
@@ -214,9 +262,20 @@ describe('NotifyService in a cordis composition', () => {
   it('logs but does not publish when ntfy is disabled', async () => {
     const root = new Context()
     const fetchMock = installFetchMock()
-    await root.plugin(NotifyService, cfg({ ntfy: { enabled: false } }))
+    await root.plugin(NotifyService, cfg(noDesktop({ ntfy: { enabled: false } })))
 
     root.emit('agent/status', { agent: rootAgent, status: 'idle' })
+
+    expect(fetchMock.calls).toHaveLength(0)
+  })
+
+  it('suppresses service sends while the master switch is off', async () => {
+    const root = new Context()
+    const fetchMock = installFetchMock()
+    await root.plugin(NotifyService, cfg(noDesktop({ enabled: false, ntfy: { enabled: true, topic: 'my-topic' } })))
+
+    const notify = (root as unknown as { get(name: string): unknown }).get('notify') as NotifyService
+    notify.send({ title: '外部提醒', body: '不应发出' })
 
     expect(fetchMock.calls).toHaveLength(0)
   })

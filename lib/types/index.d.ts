@@ -53,19 +53,25 @@ export interface NotifyInput {
  */
 export declare class NotifyService extends Service {
     /** Loader-facing config schema (defaults mirror `NOTIFY_DEFAULTS`). */
-    static Config: import("schemastery")<NotifyConfig>;
+    static Config: import("@deepseek-ai/schemastery").default<NotifyConfig>;
     /** Live config reader: settings-resolved when the namespace is attached, composition entry otherwise. */
     private current;
     /** Whether the toast identity shortcut is registered for the current config. */
     private desktopAvailable;
     /** Last registered desktop identity signature (avoids re-registering on every settings change). */
     private desktopSignature;
+    /** Latest page-presence heartbeat (true = the DSH page is visible and focused). */
+    private clientPresent;
+    /** Deadline for the current presence lease (0 while absent). */
+    private clientPresentUntil;
     constructor(ctx: Context, config?: PartialNotifyConfig);
     /** Startup validation + initial channel build; fails loud on a bad ntfy config. */
     [Service.init](): Promise<void>;
     /**
      * Publish one notification through the host channels (ntfy + native toast
      * when enabled). Never throws: channel failures are logged and dropped.
+     * The master `enabled` switch applies here too, so other plugins publishing
+     * through the service respect the same opt-out as the built-in triggers.
      * @param input - title/body plus optional tag and priority overrides.
      */
     send(input: NotifyInput): void;
@@ -83,6 +89,10 @@ export declare class NotifyService extends Service {
     private isRoot;
     /** Root check by session id (agent id === session id). */
     private isRootById;
+    /** Record one browser heartbeat; `true` leases desktop-toast suppression, `false` re-arms immediately. */
+    private markClientPresent;
+    /** Whether a live DSH page is still covering the desktop-toast channel. */
+    private isClientPresent;
     /** Human-facing session label: durable title → workspace basename → session id. */
     private labelOf;
     private push;

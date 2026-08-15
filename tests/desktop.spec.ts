@@ -93,7 +93,7 @@ describe('ensureAppIdScript', () => {
 
   it('re-registers when the shortcut icon changed (logo update propagation)', () => {
     const script = ensureAppIdScript(config, icon, helper)
-    expect(script).toContain('$existingIcon = [string]$w0.CreateShortcut($lnk).IconLocation')
+    expect(script).toContain('$existingIcon = [string]$sc0.IconLocation')
     expect(script).toContain(`$existingIcon -eq 'C:\\icons\\dsh-notify.ico'`)
   })
 
@@ -108,6 +108,19 @@ describe('ensureAppIdScript', () => {
     expect(script).toContain('cmd.exe')
     expect(script).toContain('/c start')
     expect(script).toContain("$sc.Arguments = ('/c start \"\" \"{0}\"' -f 'http://127.0.0.1:3080')")
+  })
+
+  it('re-registers when the existing shortcut was built for a different click URL', () => {
+    const script = ensureAppIdScript({ ...config, openUrl: 'http://127.0.0.1:3081' }, icon, helper)
+    expect(script).toContain('$existingArgs = [string]$sc0.Arguments')
+    expect(script).toContain("$expectedArgs = ('/c start \"\" \"{0}\"' -f 'http://127.0.0.1:3081')")
+    expect(script).toContain('$existingArgs -eq $expectedArgs')
+  })
+
+  it('treats an empty click URL as no shortcut arguments', () => {
+    const script = ensureAppIdScript({ ...config, openUrl: '' }, icon, helper)
+    expect(script).toContain("$expectedArgs = ''")
+    expect(script).toContain('$existingArgs -eq $expectedArgs')
   })
 
   it('escapes quotes in the click URL instead of breaking the PowerShell string', () => {

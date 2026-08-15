@@ -42,6 +42,7 @@ import {
 import { NotifySettingsClient } from './settings-client.ts'
 import { NotifySettingsSection } from './settings-section.tsx'
 import { mountToasts, toastStore } from './toast.tsx'
+import { mountPresence } from './presence.ts'
 import { mountWatcher, type NotifyEvent } from './watcher.ts'
 
 /** Required services: the sessions store and the slot registry must be up before the plugin mounts. */
@@ -59,9 +60,7 @@ const BLOCKING_TOAST_MS = 5 * 60_000
  */
 export function apply(ctx: Context, config: PartialNotifyConfig = {}): void {
   const cfg = withDefaults(config)
-  if (!cfg.enabled) return
   const sessions: ISessions | undefined = (ctx as unknown as { sessions?: ISessions }).sessions
-  if (sessions === undefined) return
 
   // --- settings client: the plugin's own loopback bridge (the rc.6 web
   // settings boundary allowlists namespaces, so settingsScope cannot reach
@@ -77,24 +76,33 @@ export function apply(ctx: Context, config: PartialNotifyConfig = {}): void {
   }
 
   const disposers: Array<() => void> = []
-  const openSession = (sessionId: string): void => {
-    try {
-      sessions.open(sessionId as unknown as SessionId)
-    } catch (error) {
-      console.warn('[dsh-notify] open session failed:', error)
-    }
-  }
   try {
-    disposers.push(mountWatcher(sessions, getConfig, (event) => { handleEvent(sessions, getConfig, event, openSession) }))
-    disposers.push(mountToasts(openSession))
-    // Settings page entry: rendered inside the DSH settings panel; the slot
-    // is declared by the settings shell, so inject() waits for it safely.
-    // (The 插件 → 插件配置 tab is intentionally NOT claimed — the section
-    // lives in the outer settings list only.)
+    // The settings entry mounts even while `enabled` is false — otherwise a
+    // disabled plugin would disappear from the settings panel and the user
+    // could never turn it back on from the UI.
     disposers.push(ctx.slots.inject('settings.section', () => ctx.slots.register(
       { name: 'settings.section', id: 'dsh-notify', order: 200, label: '通知' },
       () => createElement(NotifySettingsSection, { settings: settingsClient }),
     )))
+    // Tell the Host whether the DSH page is active so it can route desktop
+    // toasts away while the in-page stack is visible.
+    disposers.push(mountPresence())
+    if (sessions !== undefined) {
+      const openSession = (sessionId: string): void => {
+        try {
+          sessions.open(sessionId as unknown as SessionId)
+        } catch (error) {
+          console.warn('[dsh-notify] open session failed:', error)
+        }
+      }
+      // Watcher and toast stack stay mounted while disabled too: the event
+      // dispatch re-reads the live config, so enabling from the settings
+      // panel takes effect without a page reload.
+      disposers.push(mountWatcher(sessions, getConfig, (event) => { handleEvent(sessions, getConfig, event, openSession) }))
+      disposers.push(mountToasts(openSession))
+    } else {
+      console.warn('[dsh-notify] sessions service is absent; notifications are disabled for this page')
+    }
   } catch (error) {
     // DOM/mount failures degrade the notifications, never the GUI.
     console.warn('[dsh-notify] mount failed:', error)

@@ -9,7 +9,7 @@
  *
  * @module dsh-notify/schema
  */
-import z from 'schemastery';
+import z from '@deepseek-ai/schemastery';
 import type { NotifyConfig } from './config.ts';
 /** Loader-facing config schema; defaults mirror `NOTIFY_DEFAULTS`. */
 export declare const NotifyConfigSchema: z<NotifyConfig>;

@@ -10,7 +10,12 @@
  * - POST /api/dsh-notify/settings — one path-addressed edit
  *   `{ field: "ntfy.topic", value: "…" }`, applied through the Host settings
  *   provider's `mutate` (reachable Host-side; only the wire boundary is
- *   gated).
+ *   gated);
+ * - POST /api/dsh-notify/presence — `{ active: boolean }` heartbeat from the
+ *   browser half telling the Host whether the DSH page is visible and
+ *   focused. While a page is present, desktop toasts stay silent and the
+ *   in-page toast stack handles the notification; the heartbeat lease lets
+ *   the Host fall back to desktop toasts after the page disappears.
  *
  * The routes are loopback-fenced like the dsh-ssh API family: a LAN-exposed
  * dsh web deployment must not serve them.
@@ -26,6 +31,9 @@ import type { NotifyConfig } from './config.ts'
 /** Route path shared with the browser half. */
 export const SETTINGS_API_PATH = '/api/dsh-notify/settings'
 
+/** Presence heartbeat path shared with the browser half. */
+export const PRESENCE_API_PATH = '/api/dsh-notify/presence'
+
 /** Cap on JSON request bodies (single field edits are tiny). */
 const MAX_BODY_BYTES = 16 * 1024
 
@@ -37,6 +45,8 @@ export interface SettingsRouteDeps {
   settings: () => SettingsProvider | undefined
   /** The plugin's settings namespace (branded). */
   namespace: SettingsNamespace
+  /** Page-presence sink: true while the DSH page is visible and focused. */
+  onPresence: (active: boolean) => void
 }
 
 /** One JSON response. */
@@ -83,25 +93,60 @@ function fieldPath(field: unknown): string[] | undefined {
   return path.length > 0 && path.every(part => part !== '') ? path : undefined
 }
 
-/** Build the settings bridge route (one exact path, method-dispatched). */
+/** Build the settings bridge routes (two exact paths, method-dispatched). */
 export function makeSettingsRoutes(deps: SettingsRouteDeps): WebRoute[] {
-  return [{
-    kind: 'exact',
-    path: SETTINGS_API_PATH,
-    handler: async (req: IncomingMessage, res: ServerResponse) => {
-      if (!isLoopbackRequest(req)) {
-        writeJson(res, 403, { ok: false, error: 'forbidden: loopback-only' })
-        return
-      }
-      const method = req.method ?? 'GET'
-      if (method === 'GET') {
-        writeJson(res, 200, { ok: true, value: deps.getConfig() })
-        return
-      }
-      if (method === 'POST') {
-        const settings = deps.settings()
-        if (settings === undefined) {
-          writeJson(res, 503, { ok: false, error: 'settings service is absent' })
+  return [
+    {
+      kind: 'exact',
+      path: SETTINGS_API_PATH,
+      handler: async (req: IncomingMessage, res: ServerResponse) => {
+        if (!isLoopbackRequest(req)) {
+          writeJson(res, 403, { ok: false, error: 'forbidden: loopback-only' })
+          return
+        }
+        const method = req.method ?? 'GET'
+        if (method === 'GET') {
+          writeJson(res, 200, { ok: true, value: deps.getConfig() })
+          return
+        }
+        if (method === 'POST') {
+          const settings = deps.settings()
+          if (settings === undefined) {
+            writeJson(res, 503, { ok: false, error: 'settings service is absent' })
+            return
+          }
+          const body = await readJsonBody(req)
+          if (body === undefined) {
+            writeJson(res, 400, { ok: false, error: 'invalid JSON body' })
+            return
+          }
+          const path = fieldPath(body.field)
+          if (path === undefined) {
+            writeJson(res, 400, { ok: false, error: 'field must be a dotted key path' })
+            return
+          }
+          try {
+            await settings.mutate(deps.namespace, [{ op: 'set', path, value: body.value }])
+            writeJson(res, 200, { ok: true })
+          } catch (error) {
+            writeJson(res, 400, { ok: false, error: error instanceof Error ? error.message : String(error) })
+          }
+          return
+        }
+        writeJson(res, 405, { ok: false, error: `method not allowed: ${method}` })
+      },
+    },
+    {
+      kind: 'exact',
+      path: PRESENCE_API_PATH,
+      handler: async (req: IncomingMessage, res: ServerResponse) => {
+        if (!isLoopbackRequest(req)) {
+          writeJson(res, 403, { ok: false, error: 'forbidden: loopback-only' })
+          return
+        }
+        const method = req.method ?? 'GET'
+        if (method !== 'POST') {
+          writeJson(res, 405, { ok: false, error: `method not allowed: ${method}` })
           return
         }
         const body = await readJsonBody(req)
@@ -109,20 +154,13 @@ export function makeSettingsRoutes(deps: SettingsRouteDeps): WebRoute[] {
           writeJson(res, 400, { ok: false, error: 'invalid JSON body' })
           return
         }
-        const path = fieldPath(body.field)
-        if (path === undefined) {
-          writeJson(res, 400, { ok: false, error: 'field must be a dotted key path' })
+        if (typeof body.active !== 'boolean') {
+          writeJson(res, 400, { ok: false, error: 'active must be a boolean' })
           return
         }
-        try {
-          await settings.mutate(deps.namespace, [{ op: 'set', path, value: body.value }])
-          writeJson(res, 200, { ok: true })
-        } catch (error) {
-          writeJson(res, 400, { ok: false, error: error instanceof Error ? error.message : String(error) })
-        }
-        return
-      }
-      writeJson(res, 405, { ok: false, error: `method not allowed: ${method}` })
+        deps.onPresence(body.active)
+        writeJson(res, 200, { ok: true })
+      },
     },
-  }]
+  ]
 }

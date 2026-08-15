@@ -53,6 +53,9 @@ export const NOTIFY_SETTINGS_NAMESPACE = settingsNamespace('dsh-notify')
 /** Tool name whose invocation means "the user will be asked a question". */
 const ASK_USER_TOOL = 'ask_user_question'
 
+/** How long a presence heartbeat stays valid before desktop toasts re-arm. */
+const PRESENCE_TTL_MS = 15_000
+
 declare module '@deepseek-ai/cordis' {
   interface Context {
     /** Notification service provided by the dsh-notify plugin. */
@@ -88,6 +91,10 @@ export class NotifyService extends Service {
   private desktopAvailable = false
   /** Last registered desktop identity signature (avoids re-registering on every settings change). */
   private desktopSignature = ''
+  /** Latest page-presence heartbeat (true = the DSH page is visible and focused). */
+  private clientPresent = false
+  /** Deadline for the current presence lease (0 while absent). */
+  private clientPresentUntil = 0
 
   constructor(ctx: Context, config: PartialNotifyConfig = {}) {
     super(ctx, 'notify')
@@ -132,6 +139,7 @@ export class NotifyService extends Service {
         getConfig: () => this.cfg(),
         settings: () => this.ctx.get('settings') as SettingsProvider | undefined,
         namespace: NOTIFY_SETTINGS_NAMESPACE,
+        onPresence: (active) => { this.markClientPresent(active) },
       })
       sctx.effect(() => {
         const disposers = routes.map(route => sctx.webServer.register(route))
@@ -158,9 +166,12 @@ export class NotifyService extends Service {
   /**
    * Publish one notification through the host channels (ntfy + native toast
    * when enabled). Never throws: channel failures are logged and dropped.
+   * The master `enabled` switch applies here too, so other plugins publishing
+   * through the service respect the same opt-out as the built-in triggers.
    * @param input - title/body plus optional tag and priority overrides.
    */
   send(input: NotifyInput): void {
+    if (!this.cfg().enabled) return
     this.push({ title: input.title, body: input.body, tags: input.tags ?? 'bell' }, input.priority)
   }
 
@@ -265,6 +276,17 @@ export class NotifyService extends Service {
     }
   }
 
+  /** Record one browser heartbeat; `true` leases desktop-toast suppression, `false` re-arms immediately. */
+  private markClientPresent(active: boolean): void {
+    this.clientPresent = active
+    this.clientPresentUntil = active ? Date.now() + PRESENCE_TTL_MS : 0
+  }
+
+  /** Whether a live DSH page is still covering the desktop-toast channel. */
+  private isClientPresent(): boolean {
+    return this.clientPresent && Date.now() < this.clientPresentUntil
+  }
+
   /** Human-facing session label: durable title → workspace basename → session id. */
   private labelOf(session: Session): string {
     const titles: SessionTitleService | undefined = this.ctx.get('sessionTitle')
@@ -291,7 +313,10 @@ export class NotifyService extends Service {
       })
     }
     const desktop = cfg.desktopToast
-    if (desktop.enabled && this.desktopAvailable) {
+    // While a DSH page is visible and focused, its in-page toast stack owns
+    // the notification surface; Windows toasts re-arm as soon as the page
+    // reports absence (or the heartbeat lease expires).
+    if (desktop.enabled && this.desktopAvailable && !this.isClientPresent()) {
       void sendDesktopToast(desktop, message, this.toastLogoPath(cfg)).catch((error: unknown) => {
         this.ctx.logger.warn(`dsh-notify: desktop toast failed: ${String(error)}`)
       })

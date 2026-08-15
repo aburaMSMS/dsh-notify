@@ -10,7 +10,7 @@
  * @module dsh-notify/schema
  */
 
-import z from 'schemastery'
+import z from '@deepseek-ai/schemastery'
 import type { NotifyConfig } from './config.ts'
 
 /** Loader-facing config schema; defaults mirror `NOTIFY_DEFAULTS`. */
@@ -32,7 +32,7 @@ export const NotifyConfigSchema: z<NotifyConfig> = z.object({
     clickUrl: z.string().default('').description('点击 ntfy 通知打开的 URL（可选）'),
   }).description('ntfy.sh 推送通道'),
   desktopToast: z.object({
-    enabled: z.boolean().default(false).description('启用 Windows 原生通知（无需浏览器权限）'),
+    enabled: z.boolean().default(true).description('启用 Windows 原生通知（无需浏览器权限）'),
     shell: z.union(['pwsh', 'powershell']).default('powershell').description('PowerShell 可执行文件（默认 powershell，5.1 最稳）'),
     timeoutMs: z.number().default(10_000).description('通知进程超时（毫秒）'),
     appId: z.string().default('Dsh.Notify').description('Windows 通知身份 ID（一般无需修改）'),

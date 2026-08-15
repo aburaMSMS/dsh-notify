@@ -141,22 +141,37 @@ export function ensureAppIdScript(config: DesktopToastConfig, iconPath: string, 
     "$ErrorActionPreference = 'Stop'",
     '$lnk = Join-Path ([Environment]::GetFolderPath(\'ApplicationData\')) \'Microsoft\\Windows\\Start Menu\\Programs\'',
     `$lnk = Join-Path $lnk ${shortcut}`,
-    // Idempotence: skip only when the registered AppId AND the shortcut's
-    // current icon both match — an icon change re-registers the identity.
+    // Idempotence: skip only when the registered AppId, the shortcut's
+    // current icon, AND its click target all match — changing openUrl or the
+    // icon re-registers the identity.
     '$existingIcon = \'\'',
+    '$existingArgs = \'\'',
     'if (Test-Path -LiteralPath $lnk) {',
     '  $w0 = New-Object -ComObject WScript.Shell',
-    '  $existingIcon = [string]$w0.CreateShortcut($lnk).IconLocation',
+    '  $sc0 = $w0.CreateShortcut($lnk)',
+    '  $existingIcon = [string]$sc0.IconLocation',
+    '  $existingArgs = [string]$sc0.Arguments',
     '}',
+  ]
+  if (config.openUrl.trim() !== '') {
+    // The URL travels as a PowerShell single-quoted value and is substituted
+    // into the cmd argument template with -f, so quotes/backticks/$ in the URL
+    // stay data instead of becoming shell syntax. The stored value is:
+    // /c start "" "http://…" (cmd opens the URL, no window lingers).
+    lines.push(`$expectedArgs = ('/c start "" "{0}"' -f ${psQuote(config.openUrl.trim())})`)
+  } else {
+    lines.push("$expectedArgs = ''")
+  }
+  lines.push(
     '$need = $true',
     `$apps = @(Get-StartApps -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq ${psQuote(config.appName)} })`,
-    `if ($apps.Count -gt 0 -and $apps[0].AppID -eq ${psQuote(config.appId)} -and $existingIcon -eq ${psQuote(iconPath)}) { $need = $false }`,
+    `if ($apps.Count -gt 0 -and $apps[0].AppID -eq ${psQuote(config.appId)} -and $existingIcon -eq ${psQuote(iconPath)} -and $existingArgs -eq $expectedArgs) { $need = $false }`,
     'if ($need) {',
     "  $tmp = Join-Path $env:TEMP ('dsh-notify-' + [guid]::NewGuid().ToString('N') + '.lnk')",
     '  $ws = New-Object -ComObject WScript.Shell',
     '  $sc = $ws.CreateShortcut($tmp)',
     "  $sc.TargetPath = (Get-Command cmd.exe).Source",
-  ]
+  )
   if (config.openUrl.trim() !== '') {
     // The URL travels as a PowerShell single-quoted value and is substituted
     // into the cmd argument template with -f, so quotes/backticks/$ in the URL
