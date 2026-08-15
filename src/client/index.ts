@@ -8,13 +8,17 @@
  * plugin — it needs per-site permissions and is redundant with the native
  * channel.
  *
- * Two extra surfaces:
+ * One extra surface:
  * - the `settings.section` entry ("通知") renders the plugin's settings
- *   form inside the DSH settings panel; edits travel through
- *   `ctx.settingsScope` to the same durable namespace the Host resolves its
- *   live config from, so every change applies immediately on both halves;
+ *   form inside the DSH settings panel; edits travel through the plugin's
+ *   own loopback bridge (`/api/dsh-notify/settings`) to the same durable
+ *   namespace the Host resolves its live config from, so every change
+ *   applies immediately on both halves;
  * - the toast gates/messages re-read the live config on every event, so
  *   settings toggles take effect without a reload.
+ *
+ * The 插件 → 插件配置 tab is intentionally not claimed: the settings entry
+ * lives only in the outer settings list.
  *
  * Failure policy: mounting problems are logged, never thrown — an external
  * plugin must not take the GUI down.
@@ -85,14 +89,10 @@ export function apply(ctx: Context, config: PartialNotifyConfig = {}): void {
     disposers.push(mountToasts(openSession))
     // Settings page entry: rendered inside the DSH settings panel; the slot
     // is declared by the settings shell, so inject() waits for it safely.
+    // (The 插件 → 插件配置 tab is intentionally NOT claimed — the section
+    // lives in the outer settings list only.)
     disposers.push(ctx.slots.inject('settings.section', () => ctx.slots.register(
       { name: 'settings.section', id: 'dsh-notify', order: 200, label: '通知' },
-      () => createElement(NotifySettingsSection, { settings: settingsClient }),
-    )))
-    // Plugins settings entry: the 插件 → 插件配置 row (declared by the
-    // Plugins settings section).
-    disposers.push(ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register(
-      { name: 'settings.plugins.tab', id: 'dsh-notify', order: 100, label: '通知' },
       () => createElement(NotifySettingsSection, { settings: settingsClient }),
     )))
   } catch (error) {

@@ -1,7 +1,7 @@
 /**
  * The dsh-notify settings section rendered inside the DSH settings panel.
- * The section registers through the `settings.section` / `settings.plugins.tab`
- * slots (declared by the settings shell) and reads/writes the plugin's
+ * The section registers through the `settings.section` slot (the outer
+ * settings list entry with the gear icon) and reads/writes the plugin's
  * configuration through its own loopback bridge (the rc.6 web settings
  * boundary allowlists namespaces — see settings-route.ts), the same durable
  * store the Host half resolves its live config from, so every edit applies
